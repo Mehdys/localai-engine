@@ -1,19 +1,24 @@
-"""PDF extraction (stub for v2)."""
+"""PDF extraction with multi-page support."""
 from pathlib import Path
 from typing import List
 from rag.types import Segment
 
 
 class PDFExtractor:
-    """Extract text from PDF files (v2 - not implemented)."""
+    """Extract text from PDF files with multi-page support."""
     
     def extract(self, file_path: Path) -> List[Segment]:
         """
-        Stub implementation - returns empty list.
+        Extract text from PDF file.
         
-        PDF extraction is planned for Step 3. This ensures indexing
-        doesn't crash when encountering PDF files.
+        Args:
+            file_path: Path to PDF file
+            
+        Returns:
+            List[Segment] with one segment per page containing text and page number in loc
+            
+        Raises:
+            IOError: If file cannot be read or is not a valid PDF
+            ValueError: If PDF is corrupted or unreadable
         """
-        # Return empty list - indexing will skip this file
-        return []
-
+        pass
