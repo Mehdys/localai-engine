@@ -21,4 +21,10 @@ class PDFExtractor:
             IOError: If file cannot be read or is not a valid PDF
             ValueError: If PDF is corrupted or unreadable
         """
-        pass
+        if not file_path.exists():
+            raise IOError(f"PDF file does not exist: {file_path}")
+        
+        if not file_path.is_file():
+            raise IOError(f"Path is not a file: {file_path}")
+        
+        return []
