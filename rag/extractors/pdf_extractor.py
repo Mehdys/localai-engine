@@ -21,10 +21,26 @@ class PDFExtractor:
             IOError: If file cannot be read or is not a valid PDF
             ValueError: If PDF is corrupted or unreadable
         """
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise ImportError(
+                "pypdf is required for PDF extraction. Install it with: pip install pypdf"
+            )
+        
         if not file_path.exists():
             raise IOError(f"PDF file does not exist: {file_path}")
         
         if not file_path.is_file():
             raise IOError(f"Path is not a file: {file_path}")
         
-        return []
+        try:
+            with open(file_path, "rb") as f:
+                reader = PdfReader(f)
+                return []
+        except FileNotFoundError:
+            raise IOError(f"PDF file not found: {file_path}")
+        except PermissionError:
+            raise IOError(f"Permission denied reading PDF file: {file_path}")
+        except Exception as e:
+            raise ValueError(f"Failed to extract text from PDF {file_path}: {e}")
