@@ -37,7 +37,23 @@ class PDFExtractor:
         try:
             with open(file_path, "rb") as f:
                 reader = PdfReader(f)
-                return []
+                
+                if len(reader.pages) == 0:
+                    return []
+                
+                segments = []
+                for page_num, page in enumerate(reader.pages, start=1):
+                    text = page.extract_text()
+                    if text and text.strip():
+                        segments.append(
+                            Segment(
+                                text=text,
+                                loc={"page": page_num}
+                            )
+                        )
+                
+                return segments
+                
         except FileNotFoundError:
             raise IOError(f"PDF file not found: {file_path}")
         except PermissionError:
