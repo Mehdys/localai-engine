@@ -45,6 +45,7 @@ class PDFExtractor:
                 for page_num, page in enumerate(reader.pages, start=1):
                     text = page.extract_text()
                     if text and text.strip():
+                        text = self._normalize_text(text)
                         segments.append(
                             Segment(
                                 text=text,
@@ -60,3 +61,9 @@ class PDFExtractor:
             raise IOError(f"Permission denied reading PDF file: {file_path}")
         except Exception as e:
             raise ValueError(f"Failed to extract text from PDF {file_path}: {e}")
+    
+    def _normalize_text(self, text: str) -> str:
+        """Normalize extracted PDF text."""
+        if not text:
+            return ""
+        return text.strip()
