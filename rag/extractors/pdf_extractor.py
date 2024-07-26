@@ -1,6 +1,7 @@
 """PDF extraction with multi-page support."""
 from pathlib import Path
 from typing import List
+import re
 from rag.types import Segment
 
 
@@ -63,7 +64,26 @@ class PDFExtractor:
             raise ValueError(f"Failed to extract text from PDF {file_path}: {e}")
     
     def _normalize_text(self, text: str) -> str:
-        """Normalize extracted PDF text."""
+        """
+        Normalize extracted PDF text.
+        
+        Removes excessive whitespace while preserving paragraph structure.
+        Handles Unicode text properly.
+        """
         if not text:
             return ""
-        return text.strip()
+        
+        lines = text.split("\n")
+        normalized_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if line:
+                normalized_lines.append(line)
+            else:
+                if normalized_lines and normalized_lines[-1]:
+                    normalized_lines.append("")
+        
+        result = "\n".join(normalized_lines)
+        result = re.sub(r"\n{3,}", "\n\n", result)
+        return result.strip()
