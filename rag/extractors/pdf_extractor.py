@@ -44,8 +44,10 @@ class PDFExtractor:
                 
                 segments = []
                 for page_num, page in enumerate(reader.pages, start=1):
-                    text = page.extract_text()
-                    if text and text.strip():
+                    try:
+                        text = page.extract_text()
+                        if not text or not text.strip():
+                            continue
                         text = self._normalize_text(text)
                         segments.append(
                             Segment(
@@ -53,6 +55,11 @@ class PDFExtractor:
                                 loc={"page": page_num}
                             )
                         )
+                    except Exception:
+                        continue
+                
+                if not segments:
+                    return []
                 
                 return segments
                 
