@@ -76,6 +76,12 @@ class PDFExtractor:
         
         Removes excessive whitespace while preserving paragraph structure.
         Handles Unicode text properly.
+        
+        Args:
+            text: Raw extracted text
+            
+        Returns:
+            Normalized text string
         """
         if not text:
             return ""
