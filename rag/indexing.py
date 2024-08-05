@@ -10,6 +10,7 @@ from rag.db import RAGDatabase, EXTRACTOR_VERSION, CHUNKER_VERSION
 from rag.registry import FileRegistry
 from rag.extractors.text_extractor import TextExtractor
 from rag.extractors.code_extractor import CodeExtractor
+from rag.extractors.pdf_extractor import PDFExtractor
 from rag.chunkers.text_chunker import TextChunker
 from rag.chunkers.code_chunker import CodeChunker
 from rag.embeddings import OllamaEmbeddings
@@ -64,6 +65,7 @@ def index_folder(
     # Initialize extractors and chunkers
     text_extractor = TextExtractor()
     code_extractor = CodeExtractor()
+    pdf_extractor = PDFExtractor()
     text_chunker = TextChunker(
         chunk_size=config.chunking.text_chunk_size,
         overlap=config.chunking.text_overlap,
@@ -128,6 +130,11 @@ def index_folder(
             if file_info.file_type == "text":
                 segments = text_extractor.extract(file_info.path)
             elif file_info.file_type == "code":
+            elif file_info.file_type == "pdf":
+                # PDFs use text chunker (same as text files)
+                chunks = text_chunker.chunk(segments)
+            elif file_info.file_type == "pdf":
+                segments = pdf_extractor.extract(file_info.path)
                 segments = code_extractor.extract(file_info.path)
             else:
                 continue
@@ -139,6 +146,11 @@ def index_folder(
             if file_info.file_type == "text":
                 chunks = text_chunker.chunk(segments)
             elif file_info.file_type == "code":
+            elif file_info.file_type == "pdf":
+                # PDFs use text chunker (same as text files)
+                chunks = text_chunker.chunk(segments)
+            elif file_info.file_type == "pdf":
+                segments = pdf_extractor.extract(file_info.path)
                 chunks = code_chunker.chunk(segments)
             else:
                 continue
