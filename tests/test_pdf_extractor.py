@@ -25,3 +25,15 @@ def pdf_extractor():
         for segment in segments:
             assert isinstance(segment, Segment)
             assert "page" in segment.loc
+
+
+    def test_extract_empty_pdf(self, pdf_extractor, tmp_path):
+        """Test extracting from an empty PDF (no pages)."""
+        pdf_path = tmp_path / "empty.pdf"
+        writer = PdfWriter()
+        with open(pdf_path, "wb") as f:
+            writer.write(f)
+        
+        segments = pdf_extractor.extract(pdf_path)
+        assert isinstance(segments, list)
+        assert len(segments) == 0
