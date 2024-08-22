@@ -37,3 +37,16 @@ def pdf_extractor():
         segments = pdf_extractor.extract(pdf_path)
         assert isinstance(segments, list)
         assert len(segments) == 0
+
+
+    def test_extract_blank_page_pdf(self, pdf_extractor, tmp_path):
+        """Test extracting from a PDF with blank pages (no text)."""
+        pdf_path = tmp_path / "blank.pdf"
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        with open(pdf_path, "wb") as f:
+            writer.write(f)
+        
+        segments = pdf_extractor.extract(pdf_path)
+        assert isinstance(segments, list)
+        assert len(segments) == 0
