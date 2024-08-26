@@ -50,3 +50,24 @@ def pdf_extractor():
         segments = pdf_extractor.extract(pdf_path)
         assert isinstance(segments, list)
         assert len(segments) == 0
+
+
+    def test_extract_nonexistent_file(self, pdf_extractor, tmp_path):
+        """Test extracting from a non-existent file raises IOError."""
+        nonexistent = tmp_path / "nonexistent.pdf"
+        with pytest.raises(IOError, match="PDF file does not exist"):
+            pdf_extractor.extract(nonexistent)
+    
+    def test_extract_directory_raises_error(self, pdf_extractor, tmp_path):
+        """Test extracting from a directory raises IOError."""
+        directory = tmp_path / "dir"
+        directory.mkdir()
+        with pytest.raises(IOError, match="Path is not a file"):
+            pdf_extractor.extract(directory)
+    
+    def test_extract_invalid_pdf_raises_error(self, pdf_extractor, tmp_path):
+        """Test extracting from an invalid PDF file raises ValueError."""
+        invalid_pdf = tmp_path / "invalid.pdf"
+        invalid_pdf.write_text("This is not a PDF file")
+        with pytest.raises((ValueError, IOError)):
+            pdf_extractor.extract(invalid_pdf)
