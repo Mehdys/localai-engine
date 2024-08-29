@@ -71,3 +71,31 @@ def pdf_extractor():
         invalid_pdf.write_text("This is not a PDF file")
         with pytest.raises((ValueError, IOError)):
             pdf_extractor.extract(invalid_pdf)
+
+
+class TestPDFExtractorEdgeCases:
+    """Test PDF extractor edge cases."""
+    
+    def test_pdf_with_no_extractable_text(self, pdf_extractor, tmp_path):
+        """Test PDF with pages but no extractable text (image-only or blank)."""
+        pdf_path = tmp_path / "no_text.pdf"
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        with open(pdf_path, "wb") as f:
+            writer.write(f)
+        
+        segments = pdf_extractor.extract(pdf_path)
+        assert isinstance(segments, list)
+        assert len(segments) == 0
+    
+    def test_large_pdf_handling(self, pdf_extractor, tmp_path):
+        """Test that large PDFs are handled without crashing."""
+        pdf_path = tmp_path / "large.pdf"
+        writer = PdfWriter()
+        for _ in range(10):
+            writer.add_blank_page(width=612, height=792)
+        with open(pdf_path, "wb") as f:
+            writer.write(f)
+        
+        segments = pdf_extractor.extract(pdf_path)
+        assert isinstance(segments, list)
