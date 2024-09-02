@@ -99,3 +99,13 @@ class TestPDFExtractorEdgeCases:
         
         segments = pdf_extractor.extract(pdf_path)
         assert isinstance(segments, list)
+
+
+def test_pdf_extractor_normalization(pdf_extractor):
+    """Test that extracted text is normalized (excessive whitespace removed)."""
+    extractor = PDFExtractor()
+    text_with_whitespace = "Line 1\n\n\n\nLine 2\n   \nLine 3"
+    normalized = extractor._normalize_text(text_with_whitespace)
+    assert isinstance(normalized, str)
+    assert "\n\n\n" not in normalized
+    assert normalized.strip() == normalized
