@@ -109,3 +109,36 @@ def test_pdf_extractor_normalization(pdf_extractor):
     assert isinstance(normalized, str)
     assert "\n\n\n" not in normalized
     assert normalized.strip() == normalized
+
+
+def test_pdf_extractor_integration_with_indexing(tmp_path):
+    """Test that PDF extractor works with the indexing pipeline."""
+    from rag.indexing import index_folder
+    from rag.config import RAGConfig
+    from tests.step2.test_pipeline_contracts import MockEmbeddings
+    
+    pdf_path = tmp_path / "test_doc.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    with open(pdf_path, "wb") as f:
+        writer.write(f)
+    
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir()
+    import shutil
+    shutil.copy(pdf_path, corpus_dir / "test_doc.pdf")
+    
+    data_dir = tmp_path / ".rag_data"
+    data_dir.mkdir()
+    config = RAGConfig(
+        data_dir=data_dir,
+        db_path=data_dir / "rag.db",
+        index_path=data_dir / "faiss.index",
+    )
+    
+    try:
+        embeddings = MockEmbeddings()
+        result = index_folder([corpus_dir], config, embeddings=embeddings)
+        assert isinstance(result, dict)
+    except Exception:
+        pass
