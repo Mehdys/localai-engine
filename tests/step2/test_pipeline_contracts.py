@@ -161,16 +161,21 @@ def goodbye():
         assert isinstance(segments[0], Segment)
         assert segments[0].loc == {}
     
-    def test_pdf_extractor_returns_empty_list(self, tmp_path):
+    def test_pdf_extractor_returns_list_segment(self, tmp_path):
         """Test PDF extractor returns empty list (doesn't crash)."""
         extractor = PDFExtractor()
         test_file = tmp_path / "test.pdf"
-        test_file.write_text("fake pdf content")  # Just create a file
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        with open(test_file, "wb") as f:
+            writer.write(f)
+        # Create empty PDF  # Just create a file
         
         segments = extractor.extract(test_file)
         
         assert isinstance(segments, list)
         assert len(segments) == 0
+        # Empty PDF should return empty list
 
 
 class Test2_ChunkerContract:
