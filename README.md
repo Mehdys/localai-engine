@@ -1,8 +1,218 @@
-# Local-First RAG System
+# LocalAI Engine
 
-A production-minded, local-first RAG (Retrieval-Augmented Generation) system for macOS that indexes your files and answers questions using Ollama (LLM + embeddings). All processing happens locally - no external APIs required.
+<div align="center">
 
-## Features
+**A production-ready, local-first RAG (Retrieval-Augmented Generation) system**
+
+*Index your files locally and query them with natural language using Ollama*
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Local-First](https://img.shields.io/badge/local--first-100%25-green.svg)](https://www.inkandswitch.com/local-first/)
+
+</div>
+
+---
+
+## 🎯 Overview
+
+LocalAI Engine is a **100% local** RAG system that enables you to:
+
+- 📁 **Index** your codebase, documents, and files locally
+- 🔍 **Search** using semantic similarity (no keyword matching)
+- 💬 **Query** your indexed content with natural language questions
+- 🔒 **Privacy-first** - all processing happens on your machine
+- ⚡ **Fast** - FAISS-based vector search with HNSW indexing
+- 🔄 **Incremental** - only re-indexes changed files
+
+**No cloud services. No API keys. No data leaves your machine.**
+
+---
+
+## 🏗️ Architecture
+
+### System Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      LocalAI Engine                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │   Scanner    │───▶│  Extractors   │───▶│   Chunkers   │  │
+│  │  (File I/O)  │    │ (Text/Code)   │    │ (Smart Split)│  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+│         │                    │                   │          │
+│         │                    │                   ▼          │
+│         │                    │          ┌──────────────┐   │
+│         │                    │          │   Embeddings  │   │
+│         │                    │          │   (Ollama)    │   │
+│         │                    │          └──────────────┘   │
+│         │                    │                   │          │
+│         ▼                    ▼                   ▼          │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │   Database   │    │ Vector Store │    │ RAG Pipeline │  │
+│  │  (SQLite)    │    │   (FAISS)    │    │  (Query)     │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
+#### Indexing Pipeline
+
+```
+File System
+    │
+    ▼
+[Scanner] ──▶ Identifies indexable files
+    │
+    ▼
+[Extractor] ──▶ Extracts text → List[Segment]
+    │
+    ▼
+[Chunker] ──▶ Splits into chunks → List[Chunk]
+    │
+    ▼
+[Embedder] ──▶ Creates embeddings (Ollama)
+    │
+    ▼
+[Vector Store] ──▶ Stores in FAISS index
+    │
+    ▼
+[Database] ──▶ Stores metadata (SQLite)
+```
+
+#### Query Pipeline
+
+```
+User Question
+    │
+    ▼
+[Embedder] ──▶ Question → Embedding Vector
+    │
+    ▼
+[Vector Store] ──▶ Similarity Search → Top-K Chunks
+    │
+    ▼
+[Database] ──▶ Retrieve Metadata → RetrievedChunk[]
+    │
+    ▼
+[LLM] ──▶ Build Prompt → Generate Answer
+    │
+    ▼
+Answer + Sources
+```
+
+### Database Schema
+
+The system uses a unified SQLite database (`rag.db`) with the following schema:
+
+```
+┌─────────────────┐
+│   documents     │
+├─────────────────┤
+│ id (PK)         │
+│ path (UNIQUE)   │
+│ doc_type        │
+│ size_bytes      │
+│ created_at      │
+│ updated_at      │
+└────────┬────────┘
+         │
+         │ 1:N
+         ▼
+┌─────────────────┐
+│  doc_versions   │
+├─────────────────┤
+│ id (PK)         │
+│ document_id (FK)│
+│ sha256          │
+│ mtime           │
+│ extractor_ver   │
+│ chunker_ver     │
+│ created_at      │
+└────────┬────────┘
+         │
+         │ 1:N
+         ▼
+┌─────────────────┐
+│     chunks      │
+├─────────────────┤
+│ id (PK)         │
+│ doc_version_id  │
+│ chunk_hash      │
+│ content         │
+│ loc_json        │
+│ created_at      │
+└────────┬────────┘
+         │
+         │ 1:N
+         ▼
+┌─────────────────┐
+│   embeddings    │
+├─────────────────┤
+│ id (PK)         │
+│ chunk_id (FK)   │
+│ model           │
+│ dim             │
+│ index_name      │
+│ vector_id       │◀─── Stable ID (vector_id == chunk_id)
+│ created_at      │
+└─────────────────┘
+
+┌─────────────────┐
+│   manifests     │
+├─────────────────┤
+│ key (PK)        │
+│ value_json      │
+└─────────────────┘
+```
+
+**Key Design Decisions:**
+
+- **Stable Vector IDs**: `vector_id == chunk_id` - no JSON mapping file needed
+- **Versioning**: Documents can have multiple versions tracked via `doc_versions`
+- **Incremental Updates**: Only changed files create new `doc_version` entries
+- **Manifest System**: Stores index configuration for validation
+
+### Type System
+
+The pipeline uses a clean type contract:
+
+```python
+Segment → Chunk → RetrievedChunk
+
+@dataclass
+class Segment:
+    text: str
+    loc: Dict[str, Any]  # {line_start, line_end} or {page: N}
+
+@dataclass
+class Chunk:
+    text: str
+    loc: Dict[str, Any]
+    chunk_hash: str  # SHA256(text + canonical_json(loc))
+
+@dataclass
+class RetrievedChunk:
+    chunk_id: int
+    text: str
+    loc: Dict[str, Any]
+    path: str
+    score: float
+    display_score: float
+```
+
+**Contract Flow:**
+- **Extractors** return `List[Segment]`
+- **Chunkers** consume `List[Segment]` → return `List[Chunk]`
+- **Pipeline** returns `List[RetrievedChunk]` for display
+
+---
+
+## 🚀 Quick Start
 
 - **Incremental Indexing**: Only re-indexes changed files using SHA256 hashing
 - **Smart Chunking**: Text and code-aware chunking with function/class boundary detection
@@ -12,9 +222,9 @@ A production-minded, local-first RAG (Retrieval-Augmented Generation) system for
 - **Clean Architecture**: Modular design with separate extractors, chunkers, and vector store
 - **Persistent Registry**: SQLite-based tracking of files and chunks
 
-## Prerequisites
+### Prerequisites
 
-1. **Ollama** must be installed and running:
+1. **Install Ollama**:
    ```bash
    # Install Ollama (if not already installed)
    # Visit https://ollama.ai or use Homebrew:
@@ -34,21 +244,79 @@ A production-minded, local-first RAG (Retrieval-Augmented Generation) system for
    source venv/bin/activate
    ```
 
-## Installation
+### Installation
 
-1. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/Mehdys/localai-engine.git
+cd localai-engine
 
-2. **Install the package** (optional, for CLI):
-   ```bash
-   pip install -e .
-   ```
+# Install dependencies
+pip install -r requirements.txt
 
-## Usage
+# Install the package (for CLI)
+pip install -e .
+```
 
-### 1. Scan and Identify Files (Dry Run)
+### Basic Usage
+
+```bash
+# 1. Index your codebase
+rag index ~/projects/myproject
+
+# 2. Ask questions
+rag ask "How does authentication work?"
+
+# 3. Check system health
+rag validate
+
+# 4. Debug retrieval
+rag explain "What is the main function?"
+```
+
+---
+
+## 📖 Features
+
+### 🔍 Smart Indexing
+
+- **Incremental Updates**: Only re-indexes changed files (SHA256-based)
+- **Smart Chunking**: 
+  - Text: Sentence/paragraph-aware splitting
+  - Code: Function/class boundary detection
+- **Multiple File Types**: `.txt`, `.md`, `.py`, `.js`, `.ts`, `.json`, `.yaml`, `.pdf`
+- **Configurable Ignore Patterns**: Skip `.git/`, `node_modules/`, `venv/`, etc.
+
+### 🎯 Vector Search
+
+- **FAISS Backend**: Fast similarity search
+- **HNSW Index**: Approximate nearest neighbor (default)
+- **Flat Index**: Exact search (optional)
+- **Stable IDs**: `vector_id == chunk_id` for reliable retrieval
+
+### 💬 Natural Language Queries
+
+- **Semantic Search**: Find relevant content by meaning, not keywords
+- **Context-Aware Answers**: LLM generates answers using retrieved chunks
+- **Source Citations**: Every answer includes file paths and line numbers
+- **Configurable Top-K**: Retrieve 1-20 most relevant chunks
+
+### 🔒 Privacy & Security
+
+- **100% Local**: All processing on your machine
+- **No External APIs**: Uses Ollama (runs locally)
+- **No Data Transmission**: Nothing leaves your computer
+- **SQLite Database**: All metadata stored locally
+
+### 🛠️ Developer Tools
+
+- **`rag validate`**: System health checks and integrity validation
+- **`rag explain`**: Debug retrieval process and see what chunks were found
+- **Comprehensive Tests**: Step-by-step test suites for each feature
+
+---
+
+## ⚙️ Configuration
 
 First, scan your directories to see what would be indexed:
 
@@ -180,34 +448,106 @@ tests/
 └── test_registry.py
 ```
 
-## Data Storage
+## 🗄️ Data Storage
 
 All data is stored in `~/.rag_data/`:
-- `faiss.index` - FAISS vector index
-- `faiss.index.mapping.json` - Vector ID to chunk ID mapping
-- `metadata.db` - SQLite database with chunk metadata
-- `registry.db` - SQLite database with file registry
 
-## Example Session
+```
+~/.rag_data/
+├── rag.db              # Unified SQLite database
+│   ├── documents       # File metadata
+│   ├── doc_versions    # File versioning
+│   ├── chunks          # Text chunks
+│   ├── embeddings      # Embedding metadata
+│   └── manifests       # Index configuration
+└── faiss.index         # FAISS vector index
+```
+
+**No JSON mapping files** - everything is in the database with stable IDs.
+
+## 🔧 CLI Commands
+
+### `rag ingest <paths...>`
+
+Scan directories and identify indexable files.
 
 ```bash
-# 1. Check what would be indexed
+# Dry run (see what would be indexed)
 rag ingest ~/projects/myproject --dry-run
 
-# 2. Index the project
+# Register files in database
 rag ingest ~/projects/myproject
-rag index ~/projects/myproject
-
-# 3. Ask questions
-rag ask "How does authentication work in this codebase?"
-rag ask "What are the main classes in the project?" --top-k 10
-
-# 4. Check stats
-rag stats
-
-# 5. Update index (only changed files will be re-indexed)
-rag index ~/projects/myproject
 ```
+
+### `rag index <paths...>`
+
+Index files: extract, chunk, embed, and store.
+
+```bash
+# Index a directory
+rag index ~/projects/myproject
+
+# Index multiple directories
+rag index ~/code ~/docs
+```
+
+### `rag ask "<question>"`
+
+Query your indexed content.
+
+```bash
+# Ask a question
+rag ask "How does authentication work?"
+
+# Retrieve more chunks
+rag ask "What are the main classes?" --top-k 10
+```
+
+### `rag validate`
+
+Check system health and integrity.
+
+```bash
+rag validate
+```
+
+Output:
+```
+✓ Ollama reachable at http://localhost:11434
+✓ Embedding model 'nomic-embed-text' found (768 dim)
+✓ LLM model 'llama3.2' found
+✓ Documents index: HNSW with 1,234 vectors
+✓ Database integrity: OK
+  - No orphan chunks
+  - Total files: 42
+  - Total chunks: 1,234
+```
+
+### `rag explain "<question>"`
+
+Debug retrieval process.
+
+```bash
+rag explain "What does the main function do?"
+```
+
+Shows:
+- Retrieved chunks with scores
+- Citation information
+- Prompt length
+- Which chunks were selected
+
+### `rag stats`
+
+View index statistics.
+
+```bash
+rag stats
+```
+
+### `rag migrate`
+
+Migrate from v1 to v2 (if upgrading from older version).
 
 ## Troubleshooting
 
@@ -247,14 +587,58 @@ The system streams files and batches embeddings to handle large codebases effici
 - Use HNSW index (default) for better memory efficiency
 - Process directories separately
 
-## Development
+## 🧪 Testing
 
-Run tests:
+Run the test suite:
+
 ```bash
+# All tests
 pytest tests/
+
+# Step-specific tests
+pytest tests/step0/    # Observability tests
+pytest tests/step1/    # Database tests
+pytest tests/step2/    # Pipeline contract tests
+
+# With coverage
+pytest --cov=rag tests/
 ```
 
-## License
+---
 
-MIT
+## 🤝 Contributing
 
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Ollama](https://ollama.ai) - Local LLM and embeddings
+- [FAISS](https://github.com/facebookresearch/faiss) - Efficient similarity search
+- Inspired by the [local-first software](https://www.inkandswitch.com/local-first/) movement
+
+---
+
+<div align="center">
+
+**Built with ❤️ for privacy and local-first computing**
+
+[Report Bug](https://github.com/Mehdys/localai-engine/issues) · [Request Feature](https://github.com/Mehdys/localai-engine/issues)
+
+</div>
+
+
+# 
