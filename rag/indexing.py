@@ -237,3 +237,5 @@ def index_folder(
         "changed_files": len(changed_files),
         "chunks_indexed": total_chunks,
     }
+
+# 
