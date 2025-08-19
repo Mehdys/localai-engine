@@ -216,3 +216,5 @@ class FileScanner:
         print(f"\n  ✅ Complete! Scanned {dir_count:,} directories, found {len(files):,} indexable files")
         return files, stats
 
+
+# 
