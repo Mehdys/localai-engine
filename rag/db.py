@@ -446,3 +446,5 @@ class RAGDatabase:
                 "total_docs": total_docs,
                 "is_valid": orphan_chunks == 0 and orphan_embeddings == 0 and orphan_versions == 0,
             }
+
+# 
