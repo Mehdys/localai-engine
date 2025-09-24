@@ -1,0 +1,48 @@
+# Configuration file for RAG system
+
+ollama:
+  base_url: "http://localhost:11434"
+  embedding_model: "nomic-embed-text"
+  llm_model: "llama3"  # Using llama3 which is installed
+  timeout: 300
+
+chunking:
+  text_chunk_size: 900
+  text_overlap: 150
+  code_chunk_size: 800
+  code_overlap: 100
+
+indexing:
+  top_k: 5
+  batch_size: 32
+  use_hnsw: true  # Use HNSW for better performance on larger datasets
+  hnsw_m: 32
+  hnsw_ef_construction: 200
+
+text_extensions:
+  - ".txt"
+  - ".md"
+
+code_extensions:
+  - ".py"
+  - ".js"
+  - ".ts"
+  - ".json"
+  - ".yaml"
+  - ".yml"
+
+ignore_patterns:
+  - ".git/"
+  - "node_modules/"
+  - "dist/"
+  - "build/"
+  - ".venv/"
+  - "venv/"
+  - "__pycache__/"
+  - ".pytest_cache/"
+  - "*.pyc"
+  - "*.pyo"
+  - "*.lock"
+  - ".DS_Store"
+  - "*.log"
+
