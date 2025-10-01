@@ -27,3 +27,5 @@ class TextExtractor:
         # Return one segment with full text and empty loc
         return [Segment(text=text, loc={})]
 
+
+# 
