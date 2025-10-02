@@ -665,4 +665,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 [Report Bug](https://github.com/Mehdys/localai-engine/issues) · [Request Feature](https://github.com/Mehdys/localai-engine/issues)
 
-
