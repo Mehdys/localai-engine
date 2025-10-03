@@ -663,4 +663,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 **Built with ❤️ for privacy and local-first computing**
 
-[Report Bug](https://github.com/Mehdys/localai-engine/issues) · [Request Feature](https://github.com/Mehdys/localai-engine/issues)
+
