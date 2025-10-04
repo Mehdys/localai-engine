@@ -655,4 +655,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [Ollama](https://ollama.ai) - Local LLM and embeddings
 - [FAISS](https://github.com/facebookresearch/faiss) - Efficient similarity search
-- Inspired by the [local-first software](https://www.inkandswitch.com/local-first/) movement
+
