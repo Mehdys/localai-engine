@@ -658,4 +658,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Inspired by the [local-first software](https://www.inkandswitch.com/local-first/) movement
 
 ---
-
