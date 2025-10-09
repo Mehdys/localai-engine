@@ -654,4 +654,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgments
 
 - [Ollama](https://ollama.ai) - Local LLM and embeddings
-- [FAISS](https://github.com/facebookresearch/faiss) - Efficient similarity search
