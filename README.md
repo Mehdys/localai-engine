@@ -635,4 +635,4 @@ pytest --cov=rag tests/
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+
