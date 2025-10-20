@@ -633,4 +633,4 @@ pytest --cov=rag tests/
 
 ---
 
-## 🤝 Contributing
+
