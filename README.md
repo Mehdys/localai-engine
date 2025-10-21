@@ -629,4 +629,3 @@ pytest tests/step2/    # Pipeline contract tests
 
 # With coverage
 pytest --cov=rag tests/
-
