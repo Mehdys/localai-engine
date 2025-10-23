@@ -625,4 +625,3 @@ pytest tests/
 # Step-specific tests
 pytest tests/step0/    # Observability tests
 pytest tests/step1/    # Database tests
-
