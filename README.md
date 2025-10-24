@@ -626,4 +626,3 @@ pytest tests/
 pytest tests/step0/    # Observability tests
 pytest tests/step1/    # Database tests
 pytest tests/step2/    # Pipeline contract tests
-
