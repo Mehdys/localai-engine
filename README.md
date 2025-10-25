@@ -619,4 +619,3 @@ The system streams files and batches embeddings to handle large codebases effici
 Run the test suite:
 
 ```bash
-
