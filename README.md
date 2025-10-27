@@ -622,4 +622,3 @@ Run the test suite:
 # All tests
 pytest tests/
 
-# Step-specific tests
