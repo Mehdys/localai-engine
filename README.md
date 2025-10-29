@@ -617,4 +617,3 @@ The system streams files and batches embeddings to handle large codebases effici
 ## 🧪 Testing
 
 Run the test suite:
-
