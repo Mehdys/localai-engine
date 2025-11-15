@@ -327,19 +327,9 @@ User Query  →  Embedding  →  FAISS Search  →  RetrievedChunk[]  →  Answe
 
 ---
 
----
-
 ## 🚀 Quick Start
 
 Get started in 3 simple steps:
-
-- **Incremental Indexing**: Only re-indexes changed files using SHA256 hashing
-- **Smart Chunking**: Text and code-aware chunking with function/class boundary detection
-- **FAISS Vector Store**: Fast similarity search using FAISS (HNSW or Flat index)
-- **Skip Lists**: Configurable ignore patterns for common directories (`.git/`, `node_modules/`, etc.)
-- **Multiple File Types**: Supports text (`.txt`, `.md`), code (`.py`, `.js`, `.ts`, `.json`, `.yaml`), and PDF (v2)
-- **Clean Architecture**: Modular design with separate extractors, chunkers, and vector store
-- **Persistent Registry**: SQLite-based tracking of files and chunks
 
 ### Prerequisites
 
