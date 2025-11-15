@@ -1,0 +1,5 @@
+Metadata-Version: 2.1
+Name: local-rag
+Version: 0.1.0
+Summary: Local-first RAG system using Ollama
+Requires-Python: >=3.10
