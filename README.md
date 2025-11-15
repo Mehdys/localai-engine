@@ -2,38 +2,136 @@
 
 <div align="center">
 
-**A production-ready, local-first RAG (Retrieval-Augmented Generation) system**
+**Local-first RAG infrastructure for private, offline knowledge bases**
 
-*Index your files locally and query them with natural language using Ollama*
+*Index your codebase and documents locally. Query with natural language. Zero cloud dependencies.*
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Local-First](https://img.shields.io/badge/local--first-100%25-green.svg)](https://www.inkandswitch.com/local-first/)
 
+[Quick Start](#-quick-start) • [Architecture](#-architecture) • [Documentation](#-documentation) • [Contributing](#-contributing)
+
 </div>
 
 ---
 
-## 🎯 Overview
+## Why LocalAI Engine?
 
-LocalAI Engine is a **100% local** RAG system that enables you to:
+**The problem:** Most RAG systems require cloud APIs, send your data externally, or lock you into proprietary platforms. You want to query your private codebase and documents with natural language, but you need **complete control** and **zero data leakage**.
 
-- 📁 **Index** your codebase, documents, and files locally
-- 🔍 **Search** using semantic similarity (no keyword matching)
-- 💬 **Query** your indexed content with natural language questions
-- 🔒 **Privacy-first** - all processing happens on your machine
-- ⚡ **Fast** - FAISS-based vector search with HNSW indexing
-- 🔄 **Incremental** - only re-indexes changed files
+**The solution:** LocalAI Engine runs entirely on your machine. It uses [Ollama](https://ollama.ai) for local LLM inference, [FAISS](https://github.com/facebookresearch/faiss) for fast vector search, and a unified SQLite database for metadata. Your data never leaves your computer.
 
-**No cloud services. No API keys. No data leaves your machine.**
+**What it does:** Transforms your files into a searchable knowledge base. Ask questions in natural language. Get answers with source citations. All processing happens locally.
+
+---
+
+## Who Is This For?
+
+| Use Case | Why LocalAI Engine? |
+|----------|---------------------|
+| **Developers** | Query your codebase without exposing it to cloud services. Understand large codebases quickly. |
+| **Researchers** | Index papers and documents privately. Build knowledge bases for sensitive research. |
+| **Teams** | Self-hosted RAG infrastructure. No vendor lock-in, no API costs, complete data sovereignty. |
+| **Privacy-conscious users** | Process proprietary documents, internal wikis, or personal notes without cloud dependencies. |
+| **Offline workflows** | Work with RAG capabilities without internet connectivity. Perfect for air-gapped environments. |
+
+---
+
+## How It Compares
+
+| Feature | LocalAI Engine | LangChain | LlamaIndex | Cloud RAG (Pinecone, etc.) |
+|---------|----------------|-----------|------------|----------------------------|
+| **Local-first** | ✅ 100% local | ❌ Cloud APIs | ❌ Cloud APIs | ❌ Cloud-only |
+| **Privacy** | ✅ Zero data leaves machine | ⚠️ Depends on providers | ⚠️ Depends on providers | ❌ Data sent to cloud |
+| **Infrastructure control** | ✅ Full control | ❌ Vendor-dependent | ❌ Vendor-dependent | ❌ Vendor lock-in |
+| **Cost** | ✅ Free (runs on your hardware) | 💰 Pay per API call | 💰 Pay per API call | 💰 Subscription fees |
+| **Offline capable** | ✅ Works offline | ❌ Requires internet | ❌ Requires internet | ❌ Requires internet |
+| **Setup complexity** | ⚡ Simple (Ollama + Python) | ⚡ Moderate | ⚡ Moderate | ⚡ Simple (but cloud-dependent) |
+| **Incremental indexing** | ✅ SHA256-based change detection | ⚠️ Varies | ⚠️ Varies | ⚠️ Varies |
+| **Stable vector IDs** | ✅ Built-in (no JSON mapping) | ⚠️ Varies | ⚠️ Varies | ⚠️ Varies |
+
+**When to choose LocalAI Engine:**
+- You need complete data privacy
+- You want to avoid cloud API costs
+- You work with sensitive or proprietary content
+- You need offline capabilities
+- You prefer self-hosted infrastructure
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+1. **Ollama** (for local LLM and embeddings):
+   ```bash
+   brew install ollama  # macOS
+   # Or download from https://ollama.ai
+   
+   ollama serve
+   ollama pull nomic-embed-text  # Embeddings (768 dim)
+   ollama pull llama3.2          # LLM for answers
+   ```
+
+2. **Python 3.10+**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+### Installation
+
+```bash
+git clone https://github.com/Mehdys/localai-engine.git
+cd localai-engine
+pip install -r requirements.txt
+pip install -e .  # Install CLI
+```
+
+### Your First Query
+
+```bash
+# 1. Index your codebase
+rag index ~/projects/myproject
+
+# 2. Ask a question
+rag ask "How does authentication work?"
+
+# 3. Validate system health
+rag validate
+```
+
+**That's it.** Your files are now searchable with natural language queries.
+
+---
+
+## ✨ Features
+
+### Core Capabilities
+
+- **🔍 Semantic Search**: Find content by meaning, not keywords. Powered by FAISS vector similarity.
+- **📁 Multi-format Support**: Index code (`.py`, `.js`, `.ts`), documents (`.txt`, `.md`), and PDFs.
+- **⚡ Fast Indexing**: Incremental updates using SHA256 change detection. Only re-indexes what changed.
+- **🎯 Smart Chunking**: Code-aware (function/class boundaries) and text-aware (sentence/paragraph) splitting.
+- **🔒 Privacy-first**: 100% local processing. No external APIs. No data transmission.
+- **🛠️ Developer Tools**: Built-in validation, debugging, and integrity checks.
+
+### Technical Highlights
+
+- **Unified Database**: Single SQLite file (`rag.db`) stores all metadata. No JSON mapping files.
+- **Stable Vector IDs**: `vector_id == chunk_id` ensures reliable retrieval without external mappings.
+- **File Versioning**: Tracks document changes over time. Enables efficient incremental updates.
+- **Manifest System**: Validates index configuration. Detects configuration mismatches.
+- **Type-safe Pipeline**: Clean contracts: `Segment → Chunk → RetrievedChunk`.
 
 ---
 
 ## 🏗️ Architecture
 
-### 🎯 How It Works
+### High-Level Overview
 
-LocalAI Engine transforms your files into a searchable knowledge base through a clean, modular pipeline:
+LocalAI Engine transforms files into searchable knowledge through a modular pipeline:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -43,7 +141,7 @@ LocalAI Engine transforms your files into a searchable knowledge base through a 
                              │
                              ▼
                     ┌────────────────┐
-                    │   🔍 Scanner    │  ← Finds all indexable files
+                    │   🔍 Scanner    │  ← Finds indexable files
                     │  (File Finder)  │     Skips .git, node_modules, etc.
                     └────────┬───────┘
                              │
@@ -77,7 +175,9 @@ LocalAI Engine transforms your files into a searchable knowledge base through a 
         └──────────────┘         └──────────────┘
 ```
 
-### 📊 Indexing Flow (How Files Become Searchable)
+### Indexing Pipeline
+
+How files become searchable:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -90,7 +190,7 @@ LocalAI Engine transforms your files into a searchable knowledge base through a 
       ▼
   🔍 Scanner
       │  • Finds .py, .md, .txt, .js, etc.
-      │  • Skips ignored patterns
+      │  • Skips ignored patterns (.git/, node_modules/, etc.)
       │
       │ 2. Extract
       ▼
@@ -123,7 +223,9 @@ LocalAI Engine transforms your files into a searchable knowledge base through a 
   └─────────────────┘      └─────────────────┘
 ```
 
-### 🔍 Query Flow (How Questions Get Answered)
+### Query Pipeline
+
+How questions get answered:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -169,9 +271,9 @@ LocalAI Engine transforms your files into a searchable knowledge base through a 
       │  • Confidence scores
 ```
 
-### 💾 Database Schema
+### Database Schema
 
-The system uses a **unified SQLite database** (`rag.db`) that stores everything in one place:
+Unified SQLite database (`rag.db`) architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -241,7 +343,7 @@ The system uses a **unified SQLite database** (`rag.db`) that stores everything 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**🎯 Key Design Features:**
+**Key Design Decisions:**
 
 | Feature | Benefit |
 |---------|---------|
@@ -251,9 +353,9 @@ The system uses a **unified SQLite database** (`rag.db`) that stores everything 
 | **Manifest System** | Validates index configuration matches current settings |
 | **Unified Storage** | Everything in one database - easy to backup and migrate |
 
-### 🔄 Type System (Data Flow)
+### Type System
 
-The pipeline uses a clean, type-safe contract that flows through the system:
+Clean, type-safe pipeline contracts:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -291,21 +393,20 @@ The pipeline uses a clean, type-safe contract that flows through the system:
 **Type Definitions:**
 
 ```python
-# Step 1: Extractors produce Segments
+# Extractors produce Segments
 @dataclass
 class Segment:
     text: str                    # Extracted text content
     loc: Dict[str, Any]          # Location: {line_start, line_end} or {page: N}
 
-# Step 2: Chunkers produce Chunks
+# Chunkers produce Chunks
 @dataclass
 class Chunk:
     text: str                    # Chunk text
     loc: Dict[str, Any]          # Location metadata
     chunk_hash: str              # SHA256(text + canonical_json(loc))
-                                 # Used for deduplication
 
-# Step 3: Pipeline returns RetrievedChunks
+# Pipeline returns RetrievedChunks
 @dataclass
 class RetrievedChunk:
     chunk_id: int                # Database ID (also vector_id in FAISS)
@@ -316,7 +417,7 @@ class RetrievedChunk:
     display_score: float         # Normalized (0 to 1) for UI
 ```
 
-**🔄 Contract Flow:**
+**Contract Flow:**
 
 ```
 Extractors  →  List[Segment]  →  Chunkers  →  List[Chunk]  →  Database
@@ -327,254 +428,7 @@ User Query  →  Embedding  →  FAISS Search  →  RetrievedChunk[]  →  Answe
 
 ---
 
-## 🚀 Quick Start
-
-Get started in 3 simple steps:
-
-### Prerequisites
-
-1. **Install Ollama**:
-   ```bash
-   # Install Ollama (if not already installed)
-   # Visit https://ollama.ai or use Homebrew:
-   brew install ollama
-   
-   # Start Ollama
-   ollama serve
-   
-   # Pull required models
-   ollama pull nomic-embed-text  # For embeddings
-   ollama pull llama3.2          # For LLM (or llama3)
-   ```
-
-2. **Python 3.10+** with virtual environment:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/Mehdys/localai-engine.git
-cd localai-engine
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install the package (for CLI)
-pip install -e .
-```
-
-### Basic Usage
-
-```bash
-# 1. Index your codebase
-rag index ~/projects/myproject
-
-# 2. Ask questions
-rag ask "How does authentication work?"
-
-# 3. Check system health
-rag validate
-
-# 4. Debug retrieval
-rag explain "What is the main function?"
-```
-
----
-
-## 📖 Features
-
-### 🔍 Smart Indexing
-
-- **Incremental Updates**: Only re-indexes changed files (SHA256-based)
-- **Smart Chunking**: 
-  - Text: Sentence/paragraph-aware splitting
-  - Code: Function/class boundary detection
-- **Multiple File Types**: `.txt`, `.md`, `.py`, `.js`, `.ts`, `.json`, `.yaml`, `.pdf`
-- **Configurable Ignore Patterns**: Skip `.git/`, `node_modules/`, `venv/`, etc.
-
-### 🎯 Vector Search
-
-- **FAISS Backend**: Fast similarity search
-- **HNSW Index**: Approximate nearest neighbor (default)
-- **Flat Index**: Exact search (optional)
-- **Stable IDs**: `vector_id == chunk_id` for reliable retrieval
-
-### 💬 Natural Language Queries
-
-- **Semantic Search**: Find relevant content by meaning, not keywords
-- **Context-Aware Answers**: LLM generates answers using retrieved chunks
-- **Source Citations**: Every answer includes file paths and line numbers
-- **Configurable Top-K**: Retrieve 1-20 most relevant chunks
-
-### 🔒 Privacy & Security
-
-- **100% Local**: All processing on your machine
-- **No External APIs**: Uses Ollama (runs locally)
-- **No Data Transmission**: Nothing leaves your computer
-- **SQLite Database**: All metadata stored locally
-
-### 🛠️ Developer Tools
-
-- **`rag validate`**: System health checks and integrity validation
-- **`rag explain`**: Debug retrieval process and see what chunks were found
-- **Comprehensive Tests**: Step-by-step test suites for each feature
-
----
-
-## ⚙️ Configuration
-
-First, scan your directories to see what would be indexed:
-
-```bash
-rag ingest /path/to/your/code /path/to/docs --dry-run
-```
-
-This will print all indexable files without actually indexing them.
-
-### 2. Index Files
-
-Index files for the first time or update the index:
-
-```bash
-rag index /path/to/your/code /path/to/docs
-```
-
-The system will:
-- Scan directories recursively
-- Skip ignored patterns (`.git/`, `node_modules/`, etc.)
-- Only process changed files (based on SHA256 hash)
-- Extract text, chunk it, create embeddings, and store in FAISS
-
-### 3. Ask Questions
-
-Query your indexed content:
-
-```bash
-rag ask "What does the main function do?" --top-k 5
-```
-
-The system will:
-- Embed your question
-- Retrieve top-k similar chunks
-- Build a grounded prompt with context
-- Call Ollama LLM to generate an answer
-- Return answer with source citations
-
-### 4. Check Statistics
-
-View index statistics:
-
-```bash
-rag stats
-```
-
-Shows:
-- Number of indexed files
-- Total chunks
-- Vector store information
-- Last indexing time
-
-## Configuration
-
-Create a `config.yaml` file to customize behavior:
-
-```yaml
-ollama:
-  base_url: "http://localhost:11434"
-  embedding_model: "nomic-embed-text"
-  llm_model: "llama3.2"
-  timeout: 300
-
-chunking:
-  text_chunk_size: 900
-  text_overlap: 150
-  code_chunk_size: 800
-  code_overlap: 100
-
-indexing:
-  top_k: 5
-  batch_size: 32
-  use_hnsw: true
-  hnsw_m: 32
-  hnsw_ef_construction: 200
-
-text_extensions:
-  - ".txt"
-  - ".md"
-
-code_extensions:
-  - ".py"
-  - ".js"
-  - ".ts"
-  - ".json"
-  - ".yaml"
-  - ".yml"
-
-ignore_patterns:
-  - ".git/"
-  - "node_modules/"
-  - "dist/"
-  - "build/"
-  - ".venv/"
-  - "venv/"
-  - "__pycache__/"
-  - "*.pyc"
-  - "*.lock"
-```
-
-Use with `--config` flag:
-
-```bash
-rag index /path/to/code --config config.yaml
-```
-
-## Project Structure
-
-```
-rag/
-├── __init__.py
-├── config.py              # Configuration management
-├── scanner.py             # File discovery and filtering
-├── registry.py             # SQLite registry for files/chunks
-├── embeddings.py           # Ollama embeddings client
-├── vector_store.py         # FAISS vector store
-├── rag_pipeline.py         # RAG query pipeline
-├── cli.py                  # CLI interface
-├── extractors/
-│   ├── text_extractor.py
-│   ├── code_extractor.py
-│   └── pdf_extractor.py    # Stub for v2
-└── chunkers/
-    ├── text_chunker.py
-    └── code_chunker.py
-
-tests/
-├── test_chunkers.py
-└── test_registry.py
-```
-
-## 🗄️ Data Storage
-
-All data is stored in `~/.rag_data/`:
-
-```
-~/.rag_data/
-├── rag.db              # Unified SQLite database
-│   ├── documents       # File metadata
-│   ├── doc_versions    # File versioning
-│   ├── chunks          # Text chunks
-│   ├── embeddings      # Embedding metadata
-│   └── manifests       # Index configuration
-└── faiss.index         # FAISS vector index
-```
-
-**No JSON mapping files** - everything is in the database with stable IDs.
-
-## 🔧 CLI Commands
+## 🔧 CLI Reference
 
 ### `rag ingest <paths...>`
 
@@ -598,6 +452,9 @@ rag index ~/projects/myproject
 
 # Index multiple directories
 rag index ~/code ~/docs
+
+# Use custom config
+rag index ~/projects/myproject --config config.yaml
 ```
 
 ### `rag ask "<question>"`
@@ -620,7 +477,7 @@ Check system health and integrity.
 rag validate
 ```
 
-Output:
+**Output:**
 ```
 ✓ Ollama reachable at http://localhost:11434
 ✓ Embedding model 'nomic-embed-text' found (768 dim)
@@ -658,11 +515,174 @@ rag stats
 
 Migrate from v1 to v2 (if upgrading from older version).
 
-## Troubleshooting
+---
+
+## ⚙️ Configuration
+
+Create a `config.yaml` file to customize behavior:
+
+```yaml
+ollama:
+  base_url: "http://localhost:11434"
+  embedding_model: "nomic-embed-text"
+  llm_model: "llama3.2"
+  timeout: 300
+
+chunking:
+  text_chunk_size: 900      # Characters per text chunk
+  text_overlap: 150          # Overlap between chunks
+  code_chunk_size: 800      # Characters per code chunk
+  code_overlap: 100          # Overlap between code chunks
+
+indexing:
+  top_k: 5                   # Default number of chunks to retrieve
+  batch_size: 32             # Embedding batch size
+  use_hnsw: true             # Use HNSW index (faster, approximate)
+  hnsw_m: 32                 # HNSW parameter
+  hnsw_ef_construction: 200  # HNSW construction parameter
+
+text_extensions:
+  - ".txt"
+  - ".md"
+
+code_extensions:
+  - ".py"
+  - ".js"
+  - ".ts"
+  - ".json"
+  - ".yaml"
+  - ".yml"
+
+ignore_patterns:
+  - ".git/"
+  - "node_modules/"
+  - "dist/"
+  - "build/"
+  - ".venv/"
+  - "venv/"
+  - "__pycache__/"
+  - "*.pyc"
+  - "*.lock"
+```
+
+Use with `--config` flag:
+
+```bash
+rag index /path/to/code --config config.yaml
+```
+
+---
+
+## 📁 Project Structure
+
+```
+localai-engine/
+├── rag/
+│   ├── __init__.py
+│   ├── config.py              # Configuration management
+│   ├── scanner.py             # File discovery and filtering
+│   ├── registry.py            # File registry (compatibility layer)
+│   ├── db.py                  # Unified SQLite database
+│   ├── embeddings.py          # Ollama embeddings client
+│   ├── vector_store.py        # FAISS vector store
+│   ├── indexing.py            # Indexing pipeline
+│   ├── rag_pipeline.py        # RAG query pipeline
+│   ├── cli.py                 # CLI interface
+│   ├── types.py               # Core types (Segment, Chunk, RetrievedChunk)
+│   ├── extractors/
+│   │   ├── text_extractor.py
+│   │   ├── code_extractor.py
+│   │   └── pdf_extractor.py
+│   └── chunkers/
+│       ├── text_chunker.py
+│       └── code_chunker.py
+├── tests/
+│   ├── step0/                 # Step 0: Observability tests
+│   ├── step1/                 # Step 1: Database tests
+│   ├── step2/                 # Step 2: Pipeline contract tests
+│   └── test_*.py              # Baseline tests
+├── scripts/
+│   └── verify_step1.py       # Step 1 verification script
+├── config.example.yaml        # Example configuration
+├── requirements.txt           # Python dependencies
+├── setup.py                   # Package setup
+└── README.md                  # This file
+```
+
+---
+
+## 🗄️ Data Storage
+
+All data is stored in `~/.rag_data/`:
+
+```
+~/.rag_data/
+├── rag.db              # Unified SQLite database
+│   ├── documents       # File metadata
+│   ├── doc_versions    # File versioning
+│   ├── chunks          # Text chunks
+│   ├── embeddings      # Embedding metadata
+│   └── manifests       # Index configuration
+└── faiss.index         # FAISS vector index
+```
+
+**No JSON mapping files** - everything is in the database with stable IDs.
+
+---
+
+## 🗺️ Roadmap
+
+### v0 (Current)
+
+✅ **Core Features**
+- Local-first RAG pipeline
+- Unified SQLite database
+- FAISS vector store with stable IDs
+- Incremental indexing
+- CLI interface with validation and debugging
+
+✅ **Architecture**
+- Type-safe pipeline contracts (Segment → Chunk → RetrievedChunk)
+- File versioning system
+- Manifest-based configuration validation
+- Modular extractor/chunker architecture
+
+### v1 (Short-term)
+
+🔲 **Enhanced Features**
+- Session-based memory for conversational queries
+- Multi-index support (separate indexes for different document types)
+- Advanced chunking strategies (semantic chunking, hierarchical)
+- Batch query processing
+- Export/import functionality
+
+🔲 **Developer Experience**
+- Python SDK/API (beyond CLI)
+- Web UI for querying and visualization
+- Performance profiling and optimization tools
+- Extended test coverage
+
+### v2 (Future)
+
+🔲 **Advanced Capabilities**
+- Multi-modal support (images, audio transcription)
+- Hybrid search (vector + keyword)
+- Fine-tuned embedding models
+- Distributed indexing for large-scale deployments
+- Plugin system for custom extractors/chunkers
+
+🔲 **Enterprise Features**
+- Multi-user support with access control
+- Audit logging
+- Backup and restore utilities
+- Monitoring and observability dashboards
+
+---
+
+## 🐛 Troubleshooting
 
 ### Ollama Not Running
 
-If you see connection errors:
 ```bash
 # Check if Ollama is running
 curl http://localhost:11434/api/tags
@@ -673,20 +693,31 @@ ollama serve
 
 ### Models Not Found
 
-Ensure models are pulled:
 ```bash
+# List available models
 ollama list
-# If nomic-embed-text or llama3.2 not listed:
+
+# Pull required models
 ollama pull nomic-embed-text
 ollama pull llama3.2
 ```
 
 ### FAISS Installation Issues
 
-On macOS, you might need:
+On macOS:
 ```bash
 brew install cmake
 pip install faiss-cpu
+```
+
+### Database Integrity Issues
+
+```bash
+# Run validation
+rag validate
+
+# If issues found, you may need to re-index
+rag index <paths>
 ```
 
 ### Large File Handling
@@ -695,6 +726,8 @@ The system streams files and batches embeddings to handle large codebases effici
 - Reduce `batch_size` in config
 - Use HNSW index (default) for better memory efficiency
 - Process directories separately
+
+---
 
 ## 🧪 Testing
 
@@ -748,6 +781,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 [Report Bug](https://github.com/Mehdys/localai-engine/issues) · [Request Feature](https://github.com/Mehdys/localai-engine/issues)
 
 </div>
-
-
-# 
