@@ -31,188 +31,307 @@ LocalAI Engine is a **100% local** RAG system that enables you to:
 
 ## 🏗️ Architecture
 
-### System Overview
+### 🎯 How It Works
+
+LocalAI Engine transforms your files into a searchable knowledge base through a clean, modular pipeline:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         📁 Your Files                                │
+│                    (Code, Docs, Text Files)                          │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │   🔍 Scanner    │  ← Finds all indexable files
+                    │  (File Finder)  │     Skips .git, node_modules, etc.
+                    └────────┬───────┘
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │  📄 Extractor   │  ← Reads file content
+                    │ (Text/Code/PDF) │     Returns: List[Segment]
+                    └────────┬───────┘
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │  ✂️  Chunker    │  ← Splits into smart chunks
+                    │ (Smart Split)  │     Returns: List[Chunk]
+                    └────────┬───────┘
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │  🧠 Embeddings  │  ← Converts to vectors
+                    │    (Ollama)     │     768-dim vectors
+                    └────────┬───────┘
+                             │
+                ┌────────────┴────────────┐
+                ▼                         ▼
+        ┌──────────────┐         ┌──────────────┐
+        │  💾 Database  │         │  🔢 FAISS     │
+        │   (SQLite)    │         │  (Vectors)    │
+        │               │         │               │
+        │ • Metadata    │         │ • Fast Search │
+        │ • File Info   │         │ • HNSW Index  │
+        │ • Chunk Hash  │         │ • Stable IDs  │
+        └──────────────┘         └──────────────┘
+```
+
+### 📊 Indexing Flow (How Files Become Searchable)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    INDEXING PIPELINE                             │
+└─────────────────────────────────────────────────────────────────┘
+
+  📂 File System
+      │
+      │ 1. Scan
+      ▼
+  🔍 Scanner
+      │  • Finds .py, .md, .txt, .js, etc.
+      │  • Skips ignored patterns
+      │
+      │ 2. Extract
+      ▼
+  📄 Extractor
+      │  • Reads file content
+      │  • Detects structure (functions, classes)
+      │  • Output: Segment(text="...", loc={line: 1-10})
+      │
+      │ 3. Chunk
+      ▼
+  ✂️  Chunker
+      │  • Splits into overlapping chunks
+      │  • Preserves code structure
+      │  • Output: Chunk(text="...", hash="abc123...")
+      │
+      │ 4. Embed
+      ▼
+  🧠 Ollama Embeddings
+      │  • Converts text → 768-dim vector
+      │  • Model: nomic-embed-text
+      │
+      │ 5. Store
+      ▼
+  ┌─────────────────┐      ┌─────────────────┐
+  │  💾 SQLite DB   │      │  🔢 FAISS Index │
+  │                 │      │                 │
+  │ • File metadata │      │ • Vector search │
+  │ • Chunk content │      │ • Fast retrieval│
+  │ • Locations     │      │ • Stable IDs    │
+  └─────────────────┘      └─────────────────┘
+```
+
+### 🔍 Query Flow (How Questions Get Answered)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      QUERY PIPELINE                              │
+└─────────────────────────────────────────────────────────────────┘
+
+  ❓ User Question
+      │  "How does authentication work?"
+      │
+      │ 1. Embed Question
+      ▼
+  🧠 Ollama Embeddings
+      │  • Question → 768-dim vector
+      │
+      │ 2. Search
+      ▼
+  🔢 FAISS Vector Store
+      │  • Find top-5 similar chunks
+      │  • Returns: [(chunk_id, score), ...]
+      │
+      │ 3. Retrieve Metadata
+      ▼
+  💾 SQLite Database
+      │  • Get chunk text, file path, line numbers
+      │  • Returns: RetrievedChunk[]
+      │
+      │ 4. Build Context
+      ▼
+  📝 Prompt Builder
+      │  • Combine question + retrieved chunks
+      │  • Format: "Answer using this context: ..."
+      │
+      │ 5. Generate Answer
+      ▼
+  🤖 Ollama LLM
+      │  • Model: llama3.2
+      │  • Generates grounded answer
+      │
+      ▼
+  ✅ Answer + Sources
+      │  • Answer text
+      │  • Citations: file.py:lines 42-58
+      │  • Confidence scores
+```
+
+### 💾 Database Schema
+
+The system uses a **unified SQLite database** (`rag.db`) that stores everything in one place:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      LocalAI Engine                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   Scanner    │───▶│  Extractors   │───▶│   Chunkers   │  │
-│  │  (File I/O)  │    │ (Text/Code)   │    │ (Smart Split)│  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                    │                   │          │
-│         │                    │                   ▼          │
-│         │                    │          ┌──────────────┐   │
-│         │                    │          │   Embeddings  │   │
-│         │                    │          │   (Ollama)    │   │
-│         │                    │          └──────────────┘   │
-│         │                    │                   │          │
-│         ▼                    ▼                   ▼          │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   Database   │    │ Vector Store │    │ RAG Pipeline │  │
-│  │  (SQLite)    │    │   (FAISS)    │    │  (Query)     │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│                                                               │
+│                    📊 Unified Database (rag.db)             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  📄 documents                                               │
+│  ─────────────────────────────────────────────────────────  │
+│  • id              → Primary key                            │
+│  • path            → File path (unique)                     │
+│  • doc_type        → "text", "code", "pdf"                 │
+│  • size_bytes      → File size                              │
+│  • created_at      → When first indexed                     │
+│  • updated_at      → Last modification                      │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             │  One file can have multiple versions
+             │  (when file changes, new version created)
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│  📝 doc_versions                                            │
+│  ─────────────────────────────────────────────────────────  │
+│  • id              → Version ID                              │
+│  • document_id     → Links to documents table               │
+│  • sha256          → File hash (detects changes)            │
+│  • mtime           → Modification time                      │
+│  • extractor_ver   → Extractor version used                 │
+│  • chunker_ver     → Chunker version used                   │
+│  • created_at      → When this version was created          │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             │  Each version contains multiple chunks
+             │  (text split into overlapping pieces)
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│  ✂️  chunks                                                 │
+│  ─────────────────────────────────────────────────────────  │
+│  • id              → Chunk ID (used as vector_id!)         │
+│  • doc_version_id  → Links to doc_versions                  │
+│  • chunk_hash      → SHA256(text + location)                │
+│  • content         → Actual chunk text                      │
+│  • loc_json        → Location: {"line_start": 1, ...}      │
+│  • created_at      → When chunked                           │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             │  Each chunk has embedding metadata
+             │  (links to FAISS vector index)
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│  🧠 embeddings                                              │
+│  ─────────────────────────────────────────────────────────  │
+│  • id              → Embedding record ID                    │
+│  • chunk_id        → Links to chunks (FK)                   │
+│  • model           → "nomic-embed-text"                      │
+│  • dim             → 768 (embedding dimension)              │
+│  • index_name      → "documents"                            │
+│  • vector_id       → Same as chunk_id! (stable mapping)     │
+│  • created_at      → When embedded                          │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  ⚙️  manifests                                              │
+│  ─────────────────────────────────────────────────────────  │
+│  • key             → "index_manifest"                        │
+│  • value_json      → Config snapshot (for validation)       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Data Flow
+**🎯 Key Design Features:**
 
-#### Indexing Pipeline
+| Feature | Benefit |
+|---------|---------|
+| **Stable Vector IDs** | `vector_id == chunk_id` means no JSON mapping file needed |
+| **File Versioning** | Track file changes over time, only re-index what changed |
+| **Incremental Updates** | Changed files create new `doc_version`, unchanged files skipped |
+| **Manifest System** | Validates index configuration matches current settings |
+| **Unified Storage** | Everything in one database - easy to backup and migrate |
 
-```
-File System
-    │
-    ▼
-[Scanner] ──▶ Identifies indexable files
-    │
-    ▼
-[Extractor] ──▶ Extracts text → List[Segment]
-    │
-    ▼
-[Chunker] ──▶ Splits into chunks → List[Chunk]
-    │
-    ▼
-[Embedder] ──▶ Creates embeddings (Ollama)
-    │
-    ▼
-[Vector Store] ──▶ Stores in FAISS index
-    │
-    ▼
-[Database] ──▶ Stores metadata (SQLite)
-```
+### 🔄 Type System (Data Flow)
 
-#### Query Pipeline
+The pipeline uses a clean, type-safe contract that flows through the system:
 
 ```
-User Question
-    │
-    ▼
-[Embedder] ──▶ Question → Embedding Vector
-    │
-    ▼
-[Vector Store] ──▶ Similarity Search → Top-K Chunks
-    │
-    ▼
-[Database] ──▶ Retrieve Metadata → RetrievedChunk[]
-    │
-    ▼
-[LLM] ──▶ Build Prompt → Generate Answer
-    │
-    ▼
-Answer + Sources
+┌─────────────────────────────────────────────────────────────┐
+│                    TYPE TRANSFORMATION                       │
+└─────────────────────────────────────────────────────────────┘
+
+  📄 Raw File
+      │
+      │ Extract
+      ▼
+  📦 Segment
+      │  • text: "def hello():\n    return 'world'"
+      │  • loc: {"line_start": 1, "line_end": 2}
+      │
+      │ Chunk
+      ▼
+  ✂️  Chunk
+      │  • text: "def hello():\n    return 'world'"
+      │  • loc: {"line_start": 1, "line_end": 2}
+      │  • chunk_hash: "abc123..." (SHA256)
+      │
+      │ Store in DB + FAISS
+      │
+      │ Retrieve (on query)
+      ▼
+  🎯 RetrievedChunk
+      │  • chunk_id: 42
+      │  • text: "def hello():\n    return 'world'"
+      │  • loc: {"line_start": 1, "line_end": 2}
+      │  • path: "/path/to/file.py"
+      │  • score: 0.85 (similarity)
+      │  • display_score: 0.925 (normalized)
 ```
 
-### Database Schema
-
-The system uses a unified SQLite database (`rag.db`) with the following schema:
-
-```
-┌─────────────────┐
-│   documents     │
-├─────────────────┤
-│ id (PK)         │
-│ path (UNIQUE)   │
-│ doc_type        │
-│ size_bytes      │
-│ created_at      │
-│ updated_at      │
-└────────┬────────┘
-         │
-         │ 1:N
-         ▼
-┌─────────────────┐
-│  doc_versions   │
-├─────────────────┤
-│ id (PK)         │
-│ document_id (FK)│
-│ sha256          │
-│ mtime           │
-│ extractor_ver   │
-│ chunker_ver     │
-│ created_at      │
-└────────┬────────┘
-         │
-         │ 1:N
-         ▼
-┌─────────────────┐
-│     chunks      │
-├─────────────────┤
-│ id (PK)         │
-│ doc_version_id  │
-│ chunk_hash      │
-│ content         │
-│ loc_json        │
-│ created_at      │
-└────────┬────────┘
-         │
-         │ 1:N
-         ▼
-┌─────────────────┐
-│   embeddings    │
-├─────────────────┤
-│ id (PK)         │
-│ chunk_id (FK)   │
-│ model           │
-│ dim             │
-│ index_name      │
-│ vector_id       │◀─── Stable ID (vector_id == chunk_id)
-│ created_at      │
-└─────────────────┘
-
-┌─────────────────┐
-│   manifests     │
-├─────────────────┤
-│ key (PK)        │
-│ value_json      │
-└─────────────────┘
-```
-
-**Key Design Decisions:**
-
-- **Stable Vector IDs**: `vector_id == chunk_id` - no JSON mapping file needed
-- **Versioning**: Documents can have multiple versions tracked via `doc_versions`
-- **Incremental Updates**: Only changed files create new `doc_version` entries
-- **Manifest System**: Stores index configuration for validation
-
-### Type System
-
-The pipeline uses a clean type contract:
+**Type Definitions:**
 
 ```python
-Segment → Chunk → RetrievedChunk
-
+# Step 1: Extractors produce Segments
 @dataclass
 class Segment:
-    text: str
-    loc: Dict[str, Any]  # {line_start, line_end} or {page: N}
+    text: str                    # Extracted text content
+    loc: Dict[str, Any]          # Location: {line_start, line_end} or {page: N}
 
+# Step 2: Chunkers produce Chunks
 @dataclass
 class Chunk:
-    text: str
-    loc: Dict[str, Any]
-    chunk_hash: str  # SHA256(text + canonical_json(loc))
+    text: str                    # Chunk text
+    loc: Dict[str, Any]          # Location metadata
+    chunk_hash: str              # SHA256(text + canonical_json(loc))
+                                 # Used for deduplication
 
+# Step 3: Pipeline returns RetrievedChunks
 @dataclass
 class RetrievedChunk:
-    chunk_id: int
-    text: str
-    loc: Dict[str, Any]
-    path: str
-    score: float
-    display_score: float
+    chunk_id: int                # Database ID (also vector_id in FAISS)
+    text: str                    # Chunk content
+    loc: Dict[str, Any]          # Location for citation
+    path: str                    # File path
+    score: float                 # Raw similarity (-1 to 1)
+    display_score: float         # Normalized (0 to 1) for UI
 ```
 
-**Contract Flow:**
-- **Extractors** return `List[Segment]`
-- **Chunkers** consume `List[Segment]` → return `List[Chunk]`
-- **Pipeline** returns `List[RetrievedChunk]` for display
+**🔄 Contract Flow:**
+
+```
+Extractors  →  List[Segment]  →  Chunkers  →  List[Chunk]  →  Database
+                                                                    │
+                                                                    ▼
+User Query  →  Embedding  →  FAISS Search  →  RetrievedChunk[]  →  Answer
+```
+
+---
 
 ---
 
 ## 🚀 Quick Start
+
+Get started in 3 simple steps:
 
 - **Incremental Indexing**: Only re-indexes changed files using SHA256 hashing
 - **Smart Chunking**: Text and code-aware chunking with function/class boundary detection
