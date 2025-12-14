@@ -10,7 +10,7 @@ class Segment:
     Segments are the output of extractors and input to chunkers.
     """
     text: str
-    loc: Dict[str, Any]  # Location metadata: {line_start, line_end} or {page: N} or {char_start, char_end}
+    loc: Dict[str, Any]  # Location metadata: {line_start, line_end} or {page_start, page_end} or {char_start, char_end}
 
 
 @dataclass

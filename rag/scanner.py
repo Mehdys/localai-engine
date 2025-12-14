@@ -68,6 +68,22 @@ class ScanStatistics:
 class FileScanner:
     """Scans directories and filters files based on patterns."""
     
+    # Strong default ignores (always applied)
+    DEFAULT_IGNORES = [
+        ".git/",
+        "node_modules/",
+        ".venv/",
+        "venv/",
+        "dist/",
+        "build/",
+        "__pycache__/",
+        ".DS_Store",
+        "*.pyc",
+        "*.pyo",
+        "*.lock",
+        "*.log",
+    ]
+    
     def __init__(
         self,
         text_extensions: List[str],
@@ -76,14 +92,85 @@ class FileScanner:
     ):
         self.text_extensions = set(text_extensions)
         self.code_extensions = set(code_extensions)
-        self.ignore_patterns = ignore_patterns
+        # Merge default ignores with config ignores
+        self.ignore_patterns = self.DEFAULT_IGNORES + ignore_patterns
+        # Cache for .ragignore files per directory
+        self._ragignore_cache: Dict[Path, List[str]] = {}
     
-    def should_ignore(self, path: Path) -> bool:
-        """Check if path matches any ignore pattern."""
+    def _read_ragignore(self, directory: Path) -> List[str]:
+        """Read .ragignore file from directory if it exists."""
+        if directory in self._ragignore_cache:
+            return self._ragignore_cache[directory]
+        
+        ragignore_path = directory / ".ragignore"
+        patterns = []
+        
+        if ragignore_path.exists() and ragignore_path.is_file():
+            try:
+                with open(ragignore_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        # Skip empty lines and comments
+                        if not line or line.startswith("#"):
+                            continue
+                        patterns.append(line)
+            except (IOError, UnicodeDecodeError):
+                # If we can't read it, just skip it
+                pass
+        
+        self._ragignore_cache[directory] = patterns
+        return patterns
+    
+    def _get_ignore_patterns_for_path(self, path: Path) -> List[str]:
+        """Get all ignore patterns that apply to a given path.
+        
+        Includes:
+        - Default ignores
+        - Config ignores
+        - .ragignore patterns from root and all parent directories
+        """
+        all_patterns = list(self.ignore_patterns)
+        
+        # Collect .ragignore patterns from root and all parent directories
+        current = path if path.is_dir() else path.parent
+        root = path.anchor  # Get root of filesystem
+        
+        while current != current.parent:  # Stop at filesystem root
+            ragignore_patterns = self._read_ragignore(current)
+            all_patterns.extend(ragignore_patterns)
+            
+            if current == root:
+                break
+            current = current.parent
+        
+        return all_patterns
+    
+    def should_ignore(self, path: Path, root: Optional[Path] = None) -> bool:
+        """Check if path matches any ignore pattern.
+        
+        Args:
+            path: Path to check
+            root: Root directory being scanned (for .ragignore lookup)
+        """
+        # Get all patterns that apply to this path
+        if root is not None:
+            # Use root-relative patterns
+            all_patterns = list(self.ignore_patterns)
+            # Collect .ragignore from root and path's parent chain
+            current = path.parent
+            while current != root.parent and current != current.parent:
+                ragignore_patterns = self._read_ragignore(current)
+                all_patterns.extend(ragignore_patterns)
+                if current == root:
+                    break
+                current = current.parent
+        else:
+            all_patterns = self._get_ignore_patterns_for_path(path)
+        
         path_str = str(path)
         path_parts = path.parts
         
-        for pattern in self.ignore_patterns:
+        for pattern in all_patterns:
             # Handle directory patterns (ending with /)
             if pattern.endswith("/"):
                 pattern_dir = pattern.rstrip("/")
@@ -156,20 +243,20 @@ class FileScanner:
                     display_path = "..." + display_path[-57:]
                 print(f"\n  🔍 Scanning: {display_path}")
             
-            # Filter out ignored directories
-            ignored_dirs = [d for d in dirnames if self.should_ignore(dirpath / d)]
+            # Filter out ignored directories (use root for .ragignore lookup)
+            ignored_dirs = [d for d in dirnames if self.should_ignore(dirpath / d, root)]
             
             dirnames[:] = [
                 d for d in dirnames
-                if not self.should_ignore(dirpath / d)
+                if not self.should_ignore(dirpath / d, root)
             ]
             
             for filename in filenames:
                 filepath = dirpath / filename
                 stats.total_files += 1
                 
-                # Check if file should be ignored
-                if self.should_ignore(filepath):
+                # Check if file should be ignored (use root for .ragignore lookup)
+                if self.should_ignore(filepath, root):
                     stats.ignored_files += 1
                     continue
                 

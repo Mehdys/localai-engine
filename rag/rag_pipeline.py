@@ -25,16 +25,36 @@ class RAGPipeline:
         self.vector_store = vector_store
         self.db = db
     
-    def query(self, question: str, top_k: int = 5) -> Dict:
+    def query(
+        self, 
+        question: str, 
+        top_k: int = 5, 
+        use_general_knowledge: Optional[bool] = None,
+        similarity_threshold: Optional[float] = None
+    ) -> Dict:
         """
         Query the RAG system.
+        
+        Args:
+            question: Question to ask
+            top_k: Number of chunks to retrieve
+            use_general_knowledge: If True, allow LLM to use general knowledge when context insufficient.
+                                   If None, uses config default.
+            similarity_threshold: Minimum similarity score (0-1) to consider chunks relevant.
+                                  If None, uses config default.
         
         Returns:
             {
                 "answer": str,
-                "sources": List[Dict] with file_path, line_range, text
+                "sources": List[Dict] with file_path, line_range, text,
+                "answer_source": str,  # "indexed", "general_knowledge", "indexed_low_relevance", or "none"
+                "relevance_score": float  # Best similarity score from retrieved chunks
             }
         """
+        # Use config defaults if not provided
+        use_general = use_general_knowledge if use_general_knowledge is not None else self.config.rag.use_general_knowledge
+        threshold = similarity_threshold if similarity_threshold is not None else self.config.rag.similarity_threshold
+        
         # 1. Embed query
         query_embedding = self.embeddings.embed(question)
         
@@ -42,16 +62,37 @@ class RAGPipeline:
         results = self.vector_store.search(query_embedding, top_k)
         
         if not results:
-            return {
-                "answer": "I don't have any indexed content to answer your question.",
-                "sources": [],
-            }
+            if use_general:
+                # No indexed content, use general knowledge
+                prompt = f"""Answer the following question using your general knowledge.
+
+Question: {question}
+
+Answer:"""
+                answer = self._call_llm(prompt)
+                return {
+                    "answer": answer,
+                    "sources": [],
+                    "answer_source": "general_knowledge",
+                    "relevance_score": 0.0,
+                }
+            else:
+                return {
+                    "answer": "I don't have any indexed content to answer your question.",
+                    "sources": [],
+                    "answer_source": "none",
+                    "relevance_score": 0.0,
+                }
         
-        # 3. Get chunk metadata from DB and wrap in RetrievedChunk
+        # 3. Get chunk metadata and check relevance
         retrieved_chunks: List[RetrievedChunk] = []
+        best_score = -1.0
         
         for chunk_id, score in results:
-            # chunk_id is the stable DB chunk ID (vector_id)
+            # Normalize score from [-1, 1] to [0, 1] for threshold comparison
+            normalized_score = (float(score) + 1) / 2
+            best_score = max(best_score, normalized_score)
+            
             chunk = self.db.get_chunk_by_vector_id(
                 chunk_id,
                 self.embeddings.model,
@@ -73,7 +114,10 @@ class RAGPipeline:
             )
             retrieved_chunks.append(retrieved_chunk)
         
-        # Build sources list for backward compatibility
+        # 4. Determine if context is sufficient
+        context_sufficient = best_score >= threshold
+        
+        # 5. Build sources list
         sources = []
         context_chunks = []
         for rc in retrieved_chunks:
@@ -87,13 +131,15 @@ class RAGPipeline:
                 "text": rc.text[:200] + "..." if len(rc.text) > 200 else rc.text,
             })
         
-        # 4. Build prompt
-        context = "\n\n".join([
-            f"[Document {i+1}]\n{chunk}"
-            for i, chunk in enumerate(context_chunks)
-        ])
-        
-        prompt = f"""Answer the following question using ONLY the provided context. If the answer cannot be found in the context, say "I don't know" rather than making something up.
+        # 6. Build prompt based on context sufficiency
+        if context_sufficient:
+            # Use indexed content primarily
+            context = "\n\n".join([
+                f"[Document {i+1}]\n{chunk}"
+                for i, chunk in enumerate(context_chunks)
+            ])
+            
+            prompt = f"""Answer the following question using the provided context. Prioritize information from the context, but you may supplement with your general knowledge if the context is incomplete.
 
 Context:
 {context}
@@ -101,13 +147,49 @@ Context:
 Question: {question}
 
 Answer:"""
+            answer_source = "indexed"
+        else:
+            # Context insufficient, use general knowledge with context as reference
+            if use_general:
+                context = "\n\n".join([
+                    f"[Document {i+1}]\n{chunk}"
+                    for i, chunk in enumerate(context_chunks)
+                ])
+                
+                prompt = f"""Answer the following question using your general knowledge. The following context from indexed documents may be relevant but is not highly relevant (similarity score: {best_score:.2f}). Use it as a reference if helpful, but rely primarily on your general knowledge.
+
+Context (low relevance):
+{context}
+
+Question: {question}
+
+Answer:"""
+                answer_source = "general_knowledge"
+            else:
+                # Don't use general knowledge, but still provide context
+                context = "\n\n".join([
+                    f"[Document {i+1}]\n{chunk}"
+                    for i, chunk in enumerate(context_chunks)
+                ])
+                
+                prompt = f"""Answer the following question using ONLY the provided context. If the answer cannot be found in the context, say "I don't know" rather than making something up.
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+                answer_source = "indexed_low_relevance"
         
-        # 5. Call LLM
+        # 7. Call LLM
         answer = self._call_llm(prompt)
         
         return {
             "answer": answer,
             "sources": sources,
+            "answer_source": answer_source,
+            "relevance_score": best_score,
         }
     
     def explain(self, question: str, top_k: int = 5) -> Dict:

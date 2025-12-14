@@ -31,11 +31,18 @@ class IndexingConfig(BaseModel):
     hnsw_ef_construction: int = 200
 
 
+class RAGQueryConfig(BaseModel):
+    """RAG query configuration."""
+    use_general_knowledge: bool = True  # Allow LLM to use general knowledge if indexed content insufficient
+    similarity_threshold: float = 0.3  # Minimum similarity score (0-1) to consider chunks relevant
+
+
 class RAGConfig(BaseSettings):
     """Main RAG configuration."""
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     indexing: IndexingConfig = Field(default_factory=IndexingConfig)
+    rag: RAGQueryConfig = Field(default_factory=RAGQueryConfig)
     
     # File type support
     text_extensions: List[str] = Field(default_factory=lambda: [".txt", ".md"])

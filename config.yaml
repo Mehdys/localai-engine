@@ -46,3 +46,7 @@ ignore_patterns:
   - ".DS_Store"
   - "*.log"
 
+rag:
+  use_general_knowledge: true  # Allow LLM to use general knowledge if indexed content insufficient
+  similarity_threshold: 0.3    # Minimum similarity score (0-1) to consider chunks relevant
+

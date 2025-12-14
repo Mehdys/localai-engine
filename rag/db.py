@@ -246,6 +246,17 @@ class RAGDatabase:
             row = cursor.fetchone()
             return row[0] if row else None
     
+    def get_doc_version_chunk_ids(self, doc_version_id: int) -> List[int]:
+        """Get all chunk IDs for a document version.
+        
+        Returns:
+            List of chunk IDs that will be deleted
+        """
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM chunks WHERE doc_version_id = ?", (doc_version_id,))
+            return [row[0] for row in cursor.fetchall()]
+    
     def delete_doc_version_chunks(self, doc_version_id: int):
         """Delete all chunks for a document version."""
         with self.transaction() as conn:

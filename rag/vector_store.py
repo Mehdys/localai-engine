@@ -115,6 +115,28 @@ class VectorStore:
         # In Step 1, vector_id IS the chunk_id
         return vector_id if vector_id >= 0 else None
     
+    def remove_vectors(self, chunk_ids: List[int]):
+        """
+        Remove vectors from index by chunk IDs.
+        
+        Args:
+            chunk_ids: List of chunk IDs to remove from FAISS index
+        """
+        if self.index is None or len(chunk_ids) == 0:
+            return
+        
+        # Convert to numpy array of int64 for FAISS IDs
+        ids_array = np.array(chunk_ids, dtype=np.int64)
+        
+        # Remove from FAISS (IndexIDMap2 supports remove_ids)
+        try:
+            self.index.remove_ids(ids_array)
+        except Exception as e:
+            # If removal fails (e.g., ID not found), log but don't fail
+            # This can happen if vectors were already removed or never added
+            import warnings
+            warnings.warn(f"Failed to remove some vectors from FAISS: {e}")
+    
     def save(self):
         """Save index atomically (temp write then rename)."""
         if self.index is None:
@@ -140,9 +162,21 @@ class VectorStore:
             self.index = loaded_index
             self.base_index = loaded_index.index
         else:
-            # Legacy index without IDMap - wrap it
-            self.base_index = loaded_index
-            self.index = faiss.IndexIDMap2(self.base_index)
+            # Legacy index without IDMap
+            # Can only wrap empty indexes with IndexIDMap2
+            if loaded_index.ntotal == 0:
+                # Empty index - safe to wrap
+                self.base_index = loaded_index
+                self.index = faiss.IndexIDMap2(self.base_index)
+            else:
+                # Index has data - cannot wrap non-empty index
+                # This is a legacy index that needs migration
+                raise RuntimeError(
+                    f"Found legacy FAISS index with {loaded_index.ntotal} vectors. "
+                    "The index format has changed and requires migration. "
+                    "Please delete the old index file and re-index, or use a migration tool. "
+                    f"Index path: {self.index_path}"
+                )
     
     def get_stats(self) -> dict:
         """Get index statistics."""

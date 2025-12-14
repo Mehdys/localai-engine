@@ -204,9 +204,6 @@ def index(
             "documents",
         )
         
-        # Load existing index if it exists
-        vector_store.load()
-        
         # Compute chunking config hash for manifest
         chunking_config_str = json.dumps({
             "text_chunk_size": cfg.chunking.text_chunk_size,
@@ -239,19 +236,35 @@ def index(
                     chunker_version=CHUNKER_VERSION,
                 )
                 
-                # Delete old chunks for this version
+                # Get old chunk IDs before deleting (for FAISS cleanup)
+                old_chunk_ids = db.get_doc_version_chunk_ids(doc_version_id)
+                
+                # Remove old vectors from FAISS if any exist
+                if old_chunk_ids:
+                    vector_store.remove_vectors(old_chunk_ids)
+                
+                # Delete old chunks from DB
                 db.delete_doc_version_chunks(doc_version_id)
                 
-                # Extract text
+                # Extract segments
+                segments = []
                 if file_info.file_type == "text":
-                    text, metadata = text_extractor.extract(file_info.path)
-                    chunks = text_chunker.chunk(text, str(file_info.path))
+                    segments = text_extractor.extract(file_info.path)
                 elif file_info.file_type == "code":
-                    code, metadata = code_extractor.extract(file_info.path)
-                    structure = metadata.get("structure", [])
-                    chunks = code_chunker.chunk(code, str(file_info.path), structure)
+                    segments = code_extractor.extract(file_info.path)
                 else:
                     typer.echo(f"  Skipping unsupported type: {file_info.file_type}")
+                    continue
+                
+                if not segments:
+                    continue
+                
+                # Chunk segments
+                if file_info.file_type == "text":
+                    chunks = text_chunker.chunk(segments)
+                elif file_info.file_type == "code":
+                    chunks = code_chunker.chunk(segments)
+                else:
                     continue
                 
                 # Process chunks
@@ -260,25 +273,13 @@ def index(
                 batch_chunk_objs = []
                 
                 for chunk in chunks:
-                    # Create location JSON (range-only format)
-                    # For code/text: use line_start/line_end
-                    # Fallback to char_start/char_end if lines not available
-                    if chunk.start_line and chunk.end_line:
-                        loc_json = {
-                            "line_start": chunk.start_line,
-                            "line_end": chunk.end_line,
-                        }
-                    else:
-                        # Fallback to character offsets
-                        loc_json = {
-                            "char_start": chunk.start_offset,
-                            "char_end": chunk.end_offset,
-                        }
+                    # Use location from chunk (already in correct format)
+                    # Chunk.loc is already a dict with line_start/line_end or char_start/char_end
+                    loc_json = chunk.loc.copy() if chunk.loc else {}
                     
                     # Compute chunk hash (consistent with DB schema)
-                    chunk_hash = hashlib.sha256(
-                        f"{chunk.text}:{json.dumps(loc_json, sort_keys=True)}".encode()
-                    ).hexdigest()
+                    # Use the chunk_hash from the chunker (already computed)
+                    chunk_hash = chunk.chunk_hash
                     
                     # Check if chunk already exists
                     if db.chunk_exists(doc_version_id, chunk_hash):
@@ -386,6 +387,8 @@ def index(
 def ask(
     question: str = typer.Argument(..., help="Question to ask"),
     top_k: int = typer.Option(5, "--top-k", "-k", help="Number of chunks to retrieve"),
+    use_general: bool = typer.Option(None, "--use-general/--no-general", help="Allow LLM to use general knowledge (default: from config)"),
+    threshold: float = typer.Option(None, "--threshold", "-t", help="Similarity threshold (0-1) for considering context relevant (default: from config)"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
 ):
     """Ask a question using the RAG system."""
@@ -404,29 +407,53 @@ def ask(
         "documents",
     )
     
-    # Check if index exists
-    if not cfg.index_path.exists():
-        typer.echo("Error: No index found. Run 'rag index' first.", err=True)
+    # Check if index exists (but allow general knowledge even without index)
+    has_index = cfg.index_path.exists()
+    if not has_index and use_general is False:
+        typer.echo("Error: No index found. Run 'rag index' first, or use --use-general to allow general knowledge.", err=True)
         raise typer.Exit(1)
     
-    # Load index
-    vector_store.load()
+    # Load index if it exists
+    if has_index:
+        vector_store.load()
     
     # Create pipeline
     pipeline = RAGPipeline(cfg, embeddings, vector_store, db)
     
     # Query
     typer.echo(f"Question: {question}\n")
-    result = pipeline.query(question, top_k=top_k)
+    result = pipeline.query(
+        question, 
+        top_k=top_k,
+        use_general_knowledge=use_general,
+        similarity_threshold=threshold
+    )
     
-    # Display answer
+    # Display answer with source indicator
     typer.echo("Answer:")
+    answer_source = result.get("answer_source", "unknown")
+    relevance_score = result.get("relevance_score", 0.0)
+    
+    if answer_source == "general_knowledge":
+        typer.echo(f"📚 [Using general knowledge - relevance score: {relevance_score:.2f}]")
+    elif answer_source == "indexed_low_relevance":
+        typer.echo(f"⚠️  [Low relevance context - score: {relevance_score:.2f}]")
+    elif answer_source == "indexed":
+        typer.echo(f"📄 [Using indexed content - relevance: {relevance_score:.2f}]")
+    elif answer_source == "none":
+        typer.echo(f"❌ [No indexed content available]")
+    
     typer.echo(result["answer"])
-    typer.echo("\nSources:")
-    for i, source in enumerate(result["sources"], 1):
-        line_info = f" (lines {source['line_range']})" if source.get("line_range") else ""
-        typer.echo(f"  {i}. {source['file_path']}{line_info} (score: {source['score']:.3f})")
-        typer.echo(f"     {source['text']}")
+    
+    # Display sources if available
+    if result.get("sources"):
+        typer.echo("\nSources:")
+        for i, source in enumerate(result["sources"], 1):
+            line_info = f" (lines {source['line_range']})" if source.get("line_range") else ""
+            typer.echo(f"  {i}. {source['file_path']}{line_info} (score: {source['score']:.3f})")
+            typer.echo(f"     {source['text']}")
+    elif answer_source == "general_knowledge":
+        typer.echo("\n💡 Note: Answer generated from general knowledge (no indexed sources)")
 
 
 @app.command()

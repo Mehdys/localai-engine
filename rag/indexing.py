@@ -122,7 +122,14 @@ def index_folder(
                 chunker_version=CHUNKER_VERSION,
             )
             
-            # Delete old chunks for this version
+            # Get old chunk IDs before deleting (for FAISS cleanup)
+            old_chunk_ids = db.get_doc_version_chunk_ids(doc_version_id)
+            
+            # Remove old vectors from FAISS if any exist
+            if old_chunk_ids:
+                vector_store.remove_vectors(old_chunk_ids)
+            
+            # Delete old chunks from DB
             db.delete_doc_version_chunks(doc_version_id)
             
             # Extract segments
@@ -130,12 +137,9 @@ def index_folder(
             if file_info.file_type == "text":
                 segments = text_extractor.extract(file_info.path)
             elif file_info.file_type == "code":
-            elif file_info.file_type == "pdf":
-                # PDFs use text chunker (same as text files)
-                chunks = text_chunker.chunk(segments)
+                segments = code_extractor.extract(file_info.path)
             elif file_info.file_type == "pdf":
                 segments = pdf_extractor.extract(file_info.path)
-                segments = code_extractor.extract(file_info.path)
             else:
                 continue
             
@@ -146,12 +150,10 @@ def index_folder(
             if file_info.file_type == "text":
                 chunks = text_chunker.chunk(segments)
             elif file_info.file_type == "code":
-            elif file_info.file_type == "pdf":
-                # PDFs use text chunker (same as text files)
-                chunks = text_chunker.chunk(segments)
-            elif file_info.file_type == "pdf":
-                segments = pdf_extractor.extract(file_info.path)
                 chunks = code_chunker.chunk(segments)
+            elif file_info.file_type == "pdf":
+                # PDFs use text chunker (preserves page_start/page_end from segments)
+                chunks = text_chunker.chunk(segments)
             else:
                 continue
             

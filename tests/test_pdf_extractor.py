@@ -1,6 +1,7 @@
 """Step 3 tests: Real PDF Support."""
 import pytest
 from pathlib import Path
+from pypdf import PdfWriter
 from rag.extractors.pdf_extractor import PDFExtractor
 from rag.types import Segment
 
@@ -11,6 +12,9 @@ def pdf_extractor():
     return PDFExtractor()
 
 
+class TestPDFExtractor:
+    """Test PDF extractor basic functionality."""
+    
     def test_extract_multi_page_pdf(self, pdf_extractor, tmp_path):
         """Test extracting text from a multi-page PDF."""
         pdf_path = tmp_path / "multi_page.pdf"
@@ -24,9 +28,10 @@ def pdf_extractor():
         assert isinstance(segments, list)
         for segment in segments:
             assert isinstance(segment, Segment)
-            assert "page" in segment.loc
-
-
+            assert "page_start" in segment.loc
+            assert "page_end" in segment.loc
+            assert segment.loc["page_start"] == segment.loc["page_end"]  # Single page
+    
     def test_extract_empty_pdf(self, pdf_extractor, tmp_path):
         """Test extracting from an empty PDF (no pages)."""
         pdf_path = tmp_path / "empty.pdf"
@@ -37,8 +42,7 @@ def pdf_extractor():
         segments = pdf_extractor.extract(pdf_path)
         assert isinstance(segments, list)
         assert len(segments) == 0
-
-
+    
     def test_extract_blank_page_pdf(self, pdf_extractor, tmp_path):
         """Test extracting from a PDF with blank pages (no text)."""
         pdf_path = tmp_path / "blank.pdf"
@@ -50,8 +54,7 @@ def pdf_extractor():
         segments = pdf_extractor.extract(pdf_path)
         assert isinstance(segments, list)
         assert len(segments) == 0
-
-
+    
     def test_extract_nonexistent_file(self, pdf_extractor, tmp_path):
         """Test extracting from a non-existent file raises IOError."""
         nonexistent = tmp_path / "nonexistent.pdf"

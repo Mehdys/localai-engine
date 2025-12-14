@@ -16,7 +16,7 @@ class PDFExtractor:
             file_path: Path to PDF file
             
         Returns:
-            List[Segment] with one segment per page containing text and page number in loc
+            List[Segment] with one segment per page containing text and page range in loc (page_start, page_end)
             
         Raises:
             IOError: If file cannot be read or is not a valid PDF
@@ -52,7 +52,7 @@ class PDFExtractor:
                         segments.append(
                             Segment(
                                 text=text,
-                                loc={"page": page_num}
+                                loc={"page_start": page_num, "page_end": page_num}  # Range format
                             )
                         )
                     except Exception:
