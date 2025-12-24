@@ -396,6 +396,18 @@ rag ask "How does authentication work?"
 rag ask "What are the main classes?" --top-k 10
 ```
 
+### `rag chat`
+
+Start an interactive chat session to query your codebase continuously.
+
+```bash
+rag chat
+```
+
+Commands inside chat:
+- Type your question and press Enter
+- Type `exit`, `quit`, or `:q` to leave
+
 ### `rag validate`
 
 Check system health and integrity.

@@ -457,6 +457,115 @@ def ask(
 
 
 @app.command()
+def chat(
+    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
+    top_k: int = typer.Option(5, "--top-k", "-k", help="Number of chunks to retrieve"),
+    use_general: bool = typer.Option(None, "--use-general/--no-general", help="Allow LLM to use general knowledge (default: from config)"),
+    threshold: float = typer.Option(None, "--threshold", "-t", help="Similarity threshold (0-1) for considering context relevant (default: from config)"),
+):
+    """Start an interactive chat session."""
+    import sys
+    
+    cfg = load_config(config)
+    
+    # Initialize components (once)
+    typer.echo("Initializing RAG system...")
+    try:
+        db = RAGDatabase(cfg.db_path)
+        embeddings = OllamaEmbeddings(cfg.ollama)
+        dimension = embeddings.get_dimension()
+        vector_store = VectorStore(
+            cfg.index_path,
+            cfg.indexing,
+            dimension,
+            db,
+            embeddings.model,
+            "documents",
+        )
+        
+        # Check index
+        has_index = cfg.index_path.exists()
+        if not has_index and use_general is False:
+            typer.echo("Error: No index found. Run 'rag index' first or allow general knowledge.", err=True)
+            raise typer.Exit(1)
+            
+        if has_index:
+            vector_store.load()
+            typer.echo(f"✓ Index loaded ({vector_store.index.ntotal} vectors)")
+        else:
+            typer.echo("⚠ No index found. Using general knowledge only.")
+            
+        pipeline = RAGPipeline(cfg, embeddings, vector_store, db)
+        
+    except Exception as e:
+        typer.echo(f"Error initializing system: {e}", err=True)
+        raise typer.Exit(1)
+    
+    typer.echo("\n💬 RAG Chat Session")
+    typer.echo("Type 'exit', 'quit', or ':q' to end session.")
+    typer.echo("-" * 40)
+    
+    while True:
+        try:
+            # Get input
+            question = typer.prompt("\n> ", prompt_suffix="")
+            question = question.strip()
+            
+            if not question:
+                continue
+                
+            if question.lower() in ("exit", "quit", ":q"):
+                typer.echo("Bye! 👋")
+                break
+            
+            # Run query
+            typer.echo("Thinking...", nl=False)
+            
+            # Simple spinning animation or just carriage return could go here, 
+            # but for now we just run it.
+            # Using \r to overwrite "Thinking..." when done if terminal supports it
+            sys.stdout.write("\r" + " " * 20 + "\r") 
+            
+            result = pipeline.query(
+                question, 
+                top_k=top_k,
+                use_general_knowledge=use_general,
+                similarity_threshold=threshold
+            )
+            
+            # Display answer
+            answer_source = result.get("answer_source", "unknown")
+            relevance_score = result.get("relevance_score", 0.0)
+            
+            if answer_source == "general_knowledge":
+                typer.echo(f"📚 [General Knowledge (score: {relevance_score:.2f})]")
+            elif answer_source == "indexed_low_relevance":
+                typer.echo(f"⚠️  [Low Relevance (score: {relevance_score:.2f})]")
+            elif answer_source == "indexed":
+                typer.echo(f"📄 [Indexed Content (score: {relevance_score:.2f})]")
+            
+            typer.echo(f"\n{result['answer']}\n")
+            
+            # Display sources nicely
+            if result.get("sources"):
+                typer.echo("Sources:")
+                for i, source in enumerate(result["sources"], 1):
+                    loc = f" (L{source['line_range']})" if source.get("line_range") else ""
+                    # Truncate path to last 2 components for readability
+                    path_obj = Path(source['file_path'])
+                    short_path = str(Path(*path_obj.parts[-2:])) if len(path_obj.parts) > 1 else source['file_path']
+                    
+                    typer.echo(f"  {i}. {short_path}{loc} ({source['score']:.2f})")
+            
+        except (KeyboardInterrupt, EOFError):
+            typer.echo("\nBye! 👋")
+            break
+        except Exception as e:
+            typer.echo(f"\nError: {e}", err=True)
+
+
+
+@app.command()
 def stats(
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
 ):
